@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>画面録画</title>
+  <style>
+    body { width: 250px; font-family: sans-serif; }
+    button { width: 100%; margin: 5px 0; padding: 8px; }
+    video { width: 100%; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <button id="start">録画開始</button>
+  <button id="stop" disabled>録画停止</button>
+  <video id="preview" controls></video>
+  <div id="download"></div>
+  <script src="popup.js"></script>
+</body>
+</html>

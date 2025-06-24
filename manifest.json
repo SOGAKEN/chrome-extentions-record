@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Simple Screen Recorder",
+  "version": "1.0",
+  "description": "PC画面/ウィンドウ/タブを録画できるシンプルな拡張機能",
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": "icon.png"
+  },
+  "permissions": []
+}
