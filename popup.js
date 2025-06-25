@@ -1,39 +1,18 @@
-let mediaRecorder;
-let recordedChunks = [];
-let stream;
+import ScreenRecorder from './recorder.js';
+import UIController from './ui-controller.js';
 
-document.getElementById('start').onclick = async () => {
-  recordedChunks = [];
-  stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-  document.getElementById('preview').srcObject = stream;
-  mediaRecorder = new MediaRecorder(stream);
-
-  mediaRecorder.ondataavailable = (e) => {
-    if (e.data.size > 0) recordedChunks.push(e.data);
-  };
-
-  mediaRecorder.onstop = () => {
-    const blob = new Blob(recordedChunks, { type: 'video/webm' });
-    document.getElementById('preview').src = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'recorded.webm';
-    a.textContent = 'ダウンロード';
-    const dl = document.getElementById('download');
-    dl.innerHTML = '';
-    dl.appendChild(a);
-    if (stream) stream.getTracks().forEach(track => track.stop());
-  };
-
-  mediaRecorder.start();
-  document.getElementById('start').disabled = true;
-  document.getElementById('stop').disabled = false;
-};
-
-document.getElementById('stop').onclick = () => {
-  if (mediaRecorder && mediaRecorder.state !== "inactive") {
-    mediaRecorder.stop();
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('DOMContentLoaded - 初期化開始');
+  
+  try {
+    const recorder = new ScreenRecorder();
+    const uiController = new UIController(recorder);
+    
+    // Chrome拡張機能のコンテキストで実行されているか確認
+    if (chrome && chrome.runtime && chrome.runtime.id) {
+      console.log('Simple Screen Recorder が初期化されました');
+    }
+  } catch (error) {
+    console.error('初期化エラー:', error);
   }
-  document.getElementById('start').disabled = false;
-  document.getElementById('stop').disabled = true;
-};
+});
