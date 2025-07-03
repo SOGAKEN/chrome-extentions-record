@@ -1,0 +1,129 @@
+let mediaRecorder = null;
+let recordedChunks = [];
+let stream = null;
+
+// メッセージリスナー
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === 'startOffscreenRecording') {
+    startRecording(message.options).then(sendResponse);
+    return true; // 非同期レスポンスのため
+  } else if (message.action === 'stopOffscreenRecording') {
+    stopRecording().then(sendResponse);
+    return true;
+  }
+});
+
+// 録画開始
+async function startRecording(options) {
+  try {
+    // 既存の録画があれば停止
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      await stopRecording();
+    }
+
+    // 画面共有の取得
+    stream = await navigator.mediaDevices.getDisplayMedia({
+      video: {
+        displaySurface: 'browser'
+      },
+      audio: options.audio || false
+    });
+
+    // MediaRecorderの設定
+    const recorderOptions = {
+      mimeType: 'video/webm;codecs=vp9,opus'
+    };
+    
+    if (!MediaRecorder.isTypeSupported(recorderOptions.mimeType)) {
+      recorderOptions.mimeType = 'video/webm';
+    }
+    
+    mediaRecorder = new MediaRecorder(stream, recorderOptions);
+    recordedChunks = [];
+    
+    mediaRecorder.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        recordedChunks.push(event.data);
+      }
+    };
+    
+    mediaRecorder.onstop = async () => {
+      await saveRecording();
+    };
+    
+    // ストリームが終了したら自動的に停止
+    stream.getVideoTracks()[0].onended = async () => {
+      await stopRecording();
+    };
+    
+    mediaRecorder.start();
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Offscreen: 録画開始エラー:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// 録画停止
+async function stopRecording() {
+  try {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
+      
+      // stopイベントが完了するまで待機
+      await new Promise((resolve) => {
+        const checkInterval = setInterval(() => {
+          if (mediaRecorder.state === 'inactive') {
+            clearInterval(checkInterval);
+            resolve();
+          }
+        }, 100);
+      });
+    }
+    
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      stream = null;
+    }
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Offscreen: 録画停止エラー:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// 録画保存
+async function saveRecording() {
+  try {
+    const blob = new Blob(recordedChunks, {
+      type: 'video/webm'
+    });
+    
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+    const filename = `screen-recording-${timestamp}.webm`;
+    
+    // BlobをBase64に変換
+    const reader = new FileReader();
+    reader.readAsDataURL(blob);
+    
+    await new Promise((resolve, reject) => {
+      reader.onloadend = resolve;
+      reader.onerror = reject;
+    });
+    
+    const base64data = reader.result;
+    
+    // バックグラウンドスクリプトに送信してダウンロード
+    chrome.runtime.sendMessage({
+      action: 'downloadRecording',
+      data: base64data,
+      filename: filename
+    });
+    
+    recordedChunks = [];
+  } catch (error) {
+    console.error('Offscreen: 録画保存エラー:', error);
+  }
+}

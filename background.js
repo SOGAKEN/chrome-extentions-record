@@ -1,284 +1,161 @@
-let recordingState = {
-  isRecording: false,
-  startTime: null,
-  recordedChunks: [],
-  mimeType: 'video/webm'
-};
+let isRecording = false;
+let recordingTabId = null;
 
 // メッセージリスナー
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  switch (request.action) {
-    case 'startRecording':
-      recordingState.isRecording = true;
-      recordingState.startTime = Date.now();
-      recordingState.recordedChunks = [];
-      recordingState.mimeType = request.mimeType || 'video/webm';
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === 'startRecording') {
+    startRecording(message.options, sender).then(sendResponse);
+    return true; // 非同期レスポンスのため
+  } else if (message.action === 'stopRecording') {
+    stopRecording().then(sendResponse);
+    return true;
+  } else if (message.action === 'getRecordingStatus') {
+    sendResponse({ isRecording, recordingTabId });
+  } else if (message.action === 'downloadRecording') {
+    downloadRecording(message.data, message.filename);
+  }
+});
+
+// 録画開始
+async function startRecording(options, sender) {
+  try {
+    // 既にOffscreenドキュメントが存在するか確認
+    const existingContexts = await chrome.runtime.getContexts({
+      contextTypes: ['OFFSCREEN_DOCUMENT'],
+    });
+
+    if (existingContexts.length === 0) {
+      // Offscreenドキュメントを作成
+      await chrome.offscreen.createDocument({
+        url: 'offscreen.html',
+        reasons: ['DISPLAY_MEDIA'],
+        justification: 'Recording screen for screen recording extension'
+      });
+    }
+
+    // Offscreenドキュメントに録画開始を通知
+    const response = await chrome.runtime.sendMessage({
+      action: 'startOffscreenRecording',
+      options: options
+    });
+
+    if (response.success) {
+      isRecording = true;
+      recordingTabId = sender?.tab?.id || null;
       
-      // 状態を保存
-      chrome.storage.local.set({ recordingState });
-      
-      // 録画インジケーターを表示
-      if (request.showIndicator) {
-        console.log('録画インジケーターを表示します');
-        showRecordingIndicator();
-      }
+      // 拡張機能アイコンにバッジを表示
+      chrome.action.setBadgeText({ text: 'REC' });
+      chrome.action.setBadgeBackgroundColor({ color: '#FF0000' });
       
       // 通知を表示
-      showNotification('recording-started', {
-        title: '画面録画を開始しました',
-        message: '録画中...',
+      chrome.notifications.create({
+        type: 'basic',
         iconUrl: 'icon.png',
-        requireInteraction: true,
-        silent: false
+        title: '録画開始',
+        message: '画面録画を開始しました。ポップアップを閉じても録画は継続されます。'
       });
-      
-      // 定期的に録画状態を通知
-      startRecordingReminder();
-      
-      // 拡張機能アイコンにバッジを設定
-      setBadgeRecording();
-      
-      sendResponse({ success: true });
-      break;
-      
-    case 'addChunk':
-      if (recordingState.isRecording && request.chunk) {
-        recordingState.recordedChunks.push(request.chunk);
-        chrome.storage.local.set({ recordingState });
-      }
-      sendResponse({ success: true });
-      break;
-      
-    case 'stopRecording':
-      if (recordingState.isRecording) {
-        recordingState.isRecording = false;
-        const duration = Date.now() - recordingState.startTime;
-        
-        // 録画インジケーターを非表示
-        hideRecordingIndicator();
-        
-        // リマインダーを停止
-        stopRecordingReminder();
-        
-        // バッジをクリア
-        clearBadge();
-        
-        // 通知を更新
-        showNotification('recording-stopped', {
-          title: '画面録画を停止しました',
-          message: `録画時間: ${formatDuration(duration)}`,
-          iconUrl: 'icon.png',
-          requireInteraction: false,
-          silent: false
-        });
-        
-        // 録画データを一時的に保存
-        chrome.storage.local.set({ 
-          recordingState,
-          lastRecording: {
-            chunks: recordingState.recordedChunks,
-            duration: duration,
-            mimeType: recordingState.mimeType,
-            timestamp: Date.now()
-          }
-        });
-        
-        sendResponse({ 
-          success: true, 
-          duration: duration,
-          hasChunks: recordingState.recordedChunks.length > 0
-        });
-        
-        // 状態をリセット
-        recordingState = {
-          isRecording: false,
-          startTime: null,
-          recordedChunks: [],
-          mimeType: 'video/webm'
-        };
-      } else {
-        sendResponse({ success: false, error: '録画が開始されていません' });
-      }
-      break;
-      
-    case 'getState':
-      sendResponse({ recordingState });
-      break;
-      
-    case 'getLastRecording':
-      chrome.storage.local.get(['lastRecording'], (result) => {
-        sendResponse({ lastRecording: result.lastRecording });
-      });
-      return true; // 非同期レスポンスのため
-      
-    case 'clearLastRecording':
-      chrome.storage.local.remove(['lastRecording']);
-      sendResponse({ success: true });
-      break;
-      
-    default:
-      sendResponse({ error: '不明なアクション' });
-  }
-  
-  return true;
-});
-
-// 拡張機能の起動時に状態を復元
-chrome.runtime.onStartup.addListener(() => {
-  chrome.storage.local.get(['recordingState'], (result) => {
-    if (result.recordingState) {
-      recordingState = result.recordingState;
     }
-  });
-});
 
-// インストール時の初期化
+    return response;
+  } catch (error) {
+    console.error('Background: 録画開始エラー:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// 録画停止
+async function stopRecording() {
+  try {
+    const response = await chrome.runtime.sendMessage({
+      action: 'stopOffscreenRecording'
+    });
+
+    if (response.success) {
+      isRecording = false;
+      recordingTabId = null;
+      
+      // バッジをクリア
+      chrome.action.setBadgeText({ text: '' });
+      
+      // 通知を表示
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: 'icon.png',
+        title: '録画停止',
+        message: '画面録画を停止しました。'
+      });
+    }
+
+    return response;
+  } catch (error) {
+    console.error('Background: 録画停止エラー:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// 拡張機能インストール時の初期化
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.storage.local.clear();
+  chrome.action.setBadgeText({ text: '' });
 });
 
-// 録画インジケーターを表示
-async function showRecordingIndicator() {
-  try {
-    // 全てのタブに録画インジケーターを表示
-    const tabs = await chrome.tabs.query({});
-    for (const tab of tabs) {
-      if (tab.id && tab.url && isValidTabUrl(tab.url)) {
-        try {
-          // まずコンテンツスクリプトが注入されているか確認
-          await chrome.tabs.sendMessage(tab.id, { action: 'ping' });
-          // 応答があればインジケーターを表示
-          await chrome.tabs.sendMessage(tab.id, { action: 'showRecordingIndicator' });
-        } catch (error) {
-          // コンテンツスクリプトが注入されていない場合、注入を試みる
-          console.log(`タブ ${tab.id} にコンテンツスクリプトを注入中...`);
-          try {
-            await chrome.scripting.executeScript({
-              target: { tabId: tab.id },
-              files: ['content-script.js']
-            });
-            // 注入成功後、インジケーターを表示
-            await chrome.tabs.sendMessage(tab.id, { action: 'showRecordingIndicator' });
-          } catch (injectError) {
-            console.warn(`タブ ${tab.id} へのスクリプト注入失敗:`, injectError.message);
-          }
-        }
-      }
-    }
-  } catch (error) {
-    console.error('録画インジケーター表示エラー:', error);
+// タブが閉じられた時の処理
+chrome.tabs.onRemoved.addListener((tabId) => {
+  if (tabId === recordingTabId && isRecording) {
+    // 録画タブが閉じられた場合は録画を継続（バックグラウンドで）
+    console.log('録画タブが閉じられましたが、録画は継続します');
   }
-}
+});
 
-// 録画インジケーターを非表示
-async function hideRecordingIndicator() {
+// 録画のダウンロード
+async function downloadRecording(base64data, filename) {
   try {
-    const tabs = await chrome.tabs.query({});
-    for (const tab of tabs) {
-      if (tab.id && tab.url && isValidTabUrl(tab.url)) {
-        chrome.tabs.sendMessage(tab.id, { action: 'hideRecordingIndicator' }).catch((error) => {
-          console.log(`タブ ${tab.id} への非表示メッセージ送信失敗:`, error.message);
+    // Service WorkerではURL.createObjectURLが使えないため、
+    // base64データURLを直接使用してダウンロード
+    chrome.downloads.download({
+      url: base64data,
+      filename: filename,
+      saveAs: false
+    }, (downloadId) => {
+      if (chrome.runtime.lastError) {
+        console.error('ダウンロードエラー:', chrome.runtime.lastError);
+        chrome.notifications.create({
+          type: 'basic',
+          iconUrl: 'icon.png',
+          title: 'ダウンロードエラー',
+          message: '録画ファイルのダウンロードに失敗しました。'
+        });
+      } else {
+        // ダウンロード状態を監視
+        chrome.downloads.onChanged.addListener(function listener(delta) {
+          if (delta.id === downloadId) {
+            if (delta.state && delta.state.current === 'complete') {
+              chrome.downloads.onChanged.removeListener(listener);
+              chrome.notifications.create({
+                type: 'basic',
+                iconUrl: 'icon.png',
+                title: 'ダウンロード完了',
+                message: `録画ファイル「${filename}」を保存しました。`
+              });
+            } else if (delta.error) {
+              chrome.downloads.onChanged.removeListener(listener);
+              chrome.notifications.create({
+                type: 'basic',
+                iconUrl: 'icon.png',
+                title: 'ダウンロードエラー',
+                message: 'ファイルの保存中にエラーが発生しました。'
+              });
+            }
+          }
         });
       }
-    }
+    });
   } catch (error) {
-    console.error('録画インジケーター非表示エラー:', error);
+    console.error('録画ダウンロードエラー:', error);
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: 'icon.png',
+      title: 'エラー',
+      message: '録画ファイルの処理中にエラーが発生しました。'
+    });
   }
 }
-
-// URLが有効かチェック
-function isValidTabUrl(url) {
-  if (!url) return false;
-  
-  // 除外するURLパターン
-  const excludedPatterns = [
-    'chrome://',
-    'chrome-extension://',
-    'edge://',
-    'about:',
-    'data:',
-    'blob:',
-    'file:///Applications/', // macOSのアプリケーション
-    'file:///System/'       // システムファイル
-  ];
-  
-  return !excludedPatterns.some(pattern => url.startsWith(pattern));
-}
-
-// 通知を表示
-function showNotification(notificationId, options) {
-  chrome.notifications.create(notificationId, {
-    type: 'basic',
-    iconUrl: options.iconUrl || 'icon.png',
-    title: options.title,
-    message: options.message,
-    requireInteraction: options.requireInteraction || false,
-    silent: options.silent !== false ? true : false,
-    priority: 2
-  });
-}
-
-// 録画中リマインダー
-let reminderInterval = null;
-
-function startRecordingReminder() {
-  stopRecordingReminder(); // 既存のリマインダーを停止
-  
-  // 30秒ごとに録画中であることを通知
-  reminderInterval = setInterval(() => {
-    if (recordingState.isRecording) {
-      const duration = Date.now() - recordingState.startTime;
-      chrome.notifications.update('recording-started', {
-        message: `録画中... (${formatDuration(duration)})`
-      });
-    }
-  }, 30000); // 30秒
-}
-
-function stopRecordingReminder() {
-  if (reminderInterval) {
-    clearInterval(reminderInterval);
-    reminderInterval = null;
-  }
-  // 録画通知をクリア
-  chrome.notifications.clear('recording-started');
-}
-
-// 時間フォーマット
-function formatDuration(milliseconds) {
-  const seconds = Math.floor(milliseconds / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-  return `${minutes}分${remainingSeconds}秒`;
-}
-
-// 通知クリック時の処理
-chrome.notifications.onClicked.addListener((notificationId) => {
-  if (notificationId === 'recording-started') {
-    // 拡張機能のポップアップを開く（制限があるため、新しいタブで開く）
-    chrome.action.openPopup();
-  }
-});
-
-// 拡張機能アイコンのバッジ設定
-function setBadgeRecording() {
-  chrome.action.setBadgeText({ text: 'REC' });
-  chrome.action.setBadgeBackgroundColor({ color: '#dc2626' });
-  
-  // アイコンタイトルを更新
-  chrome.action.setTitle({ title: '録画中 - クリックして停止' });
-}
-
-function clearBadge() {
-  chrome.action.setBadgeText({ text: '' });
-  chrome.action.setTitle({ title: 'Simple Screen Recorder' });
-}
-
-// 拡張機能起動時にバッジ状態を復元
-chrome.runtime.onStartup.addListener(() => {
-  chrome.storage.local.get(['recordingState'], (result) => {
-    if (result.recordingState && result.recordingState.isRecording) {
-      setBadgeRecording();
-    }
-  });
-});

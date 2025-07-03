@@ -1,32 +1,28 @@
 {
   "manifest_version": 3,
   "name": "Simple Screen Recorder",
-  "version": "1.2",
-  "description": "PC画面/ウィンドウ/タブを録画できるシンプルな拡張機能",
+  "version": "2.0",
+  "description": "シンプルな画面録画拡張機能",
   "action": {
     "default_popup": "popup.html",
-    "default_icon": "icon.png"
+    "default_icon": {
+      "16": "icon.png",
+      "48": "icon.png",
+      "128": "icon.png"
+    }
   },
   "background": {
     "service_worker": "background.js"
   },
+  "icons": {
+    "16": "icon.png",
+    "48": "icon.png",
+    "128": "icon.png"
+  },
   "permissions": [
-    "storage",
     "downloads",
-    "activeTab",
-    "tabs",
-    "notifications",
-    "scripting"
-  ],
-  "content_scripts": [
-    {
-      "matches": ["<all_urls>"],
-      "js": ["content-script.js"],
-      "run_at": "document_idle",
-      "all_frames": false
-    }
-  ],
-  "host_permissions": [
-    "<all_urls>"
+    "offscreen",
+    "storage",
+    "notifications"
   ]
 }

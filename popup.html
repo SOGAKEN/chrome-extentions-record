@@ -3,101 +3,36 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>画面録画 - Simple Screen Recorder</title>
+  <title>Simple Screen Recorder</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="container">
-    <header>
-      <h1>画面録画</h1>
-      <div id="timer" class="timer">00:00</div>
-    </header>
+    <h1>画面録画</h1>
     
-    <div id="status" class="status ready">録画の準備ができています</div>
+    <div id="status" class="status">準備完了</div>
+    <div id="timer" class="timer">00:00</div>
     
-    <main>
-      <div class="controls">
-        <button id="start" class="btn btn-primary">
-          🔴 録画開始
-        </button>
-        <button id="stop" class="btn btn-secondary" disabled>
-          ⏹️ 録画停止
-        </button>
-      </div>
-      
-      <details class="settings" id="settings">
-        <summary>⚙️ 録画設定</summary>
-        <div class="settings-content">
-          <div class="setting-item">
-            <label for="quality">画質:</label>
-            <select id="quality" class="select">
-              <option value="high">高画質 (5 Mbps)</option>
-              <option value="medium" selected>標準 (2.5 Mbps)</option>
-              <option value="low">低画質 (1 Mbps)</option>
-            </select>
-          </div>
-          <div class="setting-item">
-            <label>
-              <input type="checkbox" id="audio" checked>
-              音声を録音する
-            </label>
-          </div>
-        </div>
-      </details>
-      
-      <details class="settings" id="download-settings">
-        <summary>📥 ダウンロード設定</summary>
-        <div class="settings-content">
-          <div class="setting-item">
-            <div class="auto-download-info">
-              ✓ 録画終了時に自動ダウンロードされます
-            </div>
-          </div>
-          <div class="setting-item">
-            <label for="download-format">保存形式:</label>
-            <select id="download-format" class="select">
-              <option value="webm">WebM (高速)</option>
-              <option value="mp4" disabled>MP4 (未対応)</option>
-            </select>
-          </div>
-          <div class="setting-item folder-setting">
-            <label for="download-path">保存先サブフォルダ:</label>
-            <div class="folder-input-group">
-              <span class="folder-prefix">📁 Downloads/</span>
-              <input type="text" id="download-path" class="input folder-input" value="ScreenRecordings" placeholder="例: ScreenRecordings">
-            </div>
-            <div class="folder-preview">
-              <span class="preview-label">保存先:</span>
-              <code class="preview-path">Downloads/<span id="folder-preview-text">ScreenRecordings</span>/</code>
-            </div>
-            <small class="help-text">💡 サブフォルダ名を入力してください（存在しない場合は自動作成されます）</small>
-          </div>
-          <div class="setting-item">
-            <label>
-              <input type="checkbox" id="show-recording-indicator" checked>
-              録画中に画面に枠を表示
-            </label>
-          </div>
-          <div class="setting-item">
-            <button id="open-downloads" class="btn btn-small">
-              📂 ダウンロードフォルダを開く
-            </button>
-          </div>
-        </div>
-      </details>
-      
-      <div class="preview-container">
-        <video id="preview" class="preview" controls muted></video>
-      </div>
-      
-      <div id="download" class="download-container"></div>
-    </main>
+    <div class="controls">
+      <button id="startBtn" class="btn btn-primary">
+        録画開始
+      </button>
+      <button id="stopBtn" class="btn btn-stop" disabled>
+        録画停止
+      </button>
+    </div>
     
-    <footer>
-      <p class="tips">💡 ヒント: 録画中にタブを閉じると録画が停止します</p>
-    </footer>
+    <label class="audio-option">
+      <input type="checkbox" id="audioCheck" checked>
+      音声を録音する
+    </label>
+    
+    <div class="download-section" id="downloadSection" style="display: none;">
+      <h3>録画ファイル</h3>
+      <div id="downloadList" class="download-list"></div>
+    </div>
   </div>
   
-  <script type="module" src="popup.js"></script>
+  <script src="popup.js"></script>
 </body>
 </html>
