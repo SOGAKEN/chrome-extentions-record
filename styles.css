@@ -79,8 +79,7 @@ h1 {
   background: #b71c1c;
 }
 
-.audio-option,
-.wasm-option {
+.audio-option {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -91,14 +90,8 @@ h1 {
   margin: 8px 0;
 }
 
-.audio-option input,
-.wasm-option input {
+.audio-option input {
   cursor: pointer;
-}
-
-.wasm-option {
-  color: #4caf50;
-  font-weight: 500;
 }
 
 /* ダウンロードセクション */

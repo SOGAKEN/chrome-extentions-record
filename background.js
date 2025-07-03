@@ -55,15 +55,13 @@ async function startRecording(options, sender) {
     });
 
     if (existingContexts.length === 0) {
-      // WASMサポートの確認とOffscreenドキュメントの選択
-      const baseUrl = options.useWASM && 'VideoEncoder' in self 
-        ? 'offscreen-wasm.html' 
-        : 'offscreen.html';
+      // 常にWASMモードを使用
+      const baseUrl = 'offscreen-wasm.html';
       
       // 録画オプションをURLパラメータとして追加
       const params = new URLSearchParams({
         audio: options.audio || false,
-        useWASM: options.useWASM || false,
+        useWASM: true,
         autoStart: true
       });
       
