@@ -51,9 +51,12 @@ async function startRecording(options) {
       await saveRecording();
     };
     
-    // ストリームが終了したら自動的に停止
+    // ストリームが終了したら自動的に停止（共有停止ボタンが押された場合）
     stream.getVideoTracks()[0].onended = async () => {
+      console.log('共有が停止されました。録画を終了します。');
       await stopRecording();
+      // バックグラウンドに通知
+      chrome.runtime.sendMessage({ action: 'recordingStopped' });
     };
     
     mediaRecorder.start();

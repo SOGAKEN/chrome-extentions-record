@@ -54,6 +54,15 @@ async function startRecording(options, sender) {
         title: '録画開始',
         message: '画面録画を開始しました。ポップアップを閉じても録画は継続されます。'
       });
+      
+      // 録画中のタブにボーダーを表示
+      if (recordingTabId) {
+        try {
+          await chrome.tabs.sendMessage(recordingTabId, { action: 'showRecordingBorder' });
+        } catch (error) {
+          console.log('Could not show border - tab might not support content scripts');
+        }
+      }
     }
 
     return response;
@@ -72,6 +81,16 @@ async function stopRecording() {
 
     if (response.success) {
       isRecording = false;
+      
+      // ボーダーを非表示
+      if (recordingTabId) {
+        try {
+          await chrome.tabs.sendMessage(recordingTabId, { action: 'hideRecordingBorder' });
+        } catch (error) {
+          console.log('Could not hide border - tab might have been closed');
+        }
+      }
+      
       recordingTabId = null;
       
       // バッジをクリア
