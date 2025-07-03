@@ -2,12 +2,28 @@ let mediaRecorder = null;
 let recordedChunks = [];
 let stream = null;
 
+// URLパラメータから設定を取得
+const urlParams = new URLSearchParams(window.location.search);
+const autoStart = urlParams.get('autoStart') === 'true';
+const audioOption = urlParams.get('audio') === 'true';
+
+// 自動開始が有効な場合は録画を開始
+if (autoStart) {
+  console.log('Auto-starting recording with options:', { audio: audioOption });
+  startRecording({ audio: audioOption }).then(result => {
+    if (!result.success) {
+      console.error('Auto-start failed:', result.error);
+    }
+  });
+}
+
 // メッセージリスナー
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === 'startOffscreenRecording') {
+  // 新しい統一されたアクション名に対応
+  if (message.action === 'startRecording' || message.action === 'startOffscreenRecording') {
     startRecording(message.options).then(sendResponse);
     return true; // 非同期レスポンスのため
-  } else if (message.action === 'stopOffscreenRecording') {
+  } else if (message.action === 'stopRecording' || message.action === 'stopOffscreenRecording') {
     stopRecording().then(sendResponse);
     return true;
   }

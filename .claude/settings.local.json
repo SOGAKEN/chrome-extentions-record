@@ -7,7 +7,8 @@
       "Bash(ls:*)",
       "mcp__inkdrop__read-note",
       "mcp__inkdrop__update-note",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ],
     "deny": []
   }

@@ -13,25 +13,74 @@ let isUsingWASM = false;
 // Check if WebCodecs API is available
 const isWebCodecsSupported = 'VideoEncoder' in self && 'AudioEncoder' in self;
 
+// URLパラメータから設定を取得
+const urlParams = new URLSearchParams(window.location.search);
+const autoStart = urlParams.get('autoStart') === 'true';
+const audioOption = urlParams.get('audio') === 'true';
+const useWASMOption = urlParams.get('useWASM') === 'true';
+
+// 自動開始が有効な場合は録画を開始
+if (autoStart) {
+  console.log('Auto-starting WASM recording with options:', { audio: audioOption, useWASM: useWASMOption });
+  startRecording({ audio: audioOption, useWASM: useWASMOption }).then(result => {
+    if (!result.success) {
+      console.error('Auto-start failed:', result.error);
+    }
+  });
+}
+
 // Listen for messages from the background script
 chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
   console.log('Offscreen received message:', request.action);
   
-  if (request.action === 'startRecording') {
-    try {
-      await startRecording(request.options);
-      sendResponse({ success: true });
-    } catch (error) {
-      console.error('Failed to start recording:', error);
-      sendResponse({ success: false, error: error.message });
+  // Offscreenへの転送メッセージの場合
+  if (request.toOffscreen) {
+    let response;
+    
+    if (request.action === 'startRecording') {
+      try {
+        await startRecording(request.options);
+        response = { success: true };
+      } catch (error) {
+        console.error('Failed to start recording:', error);
+        response = { success: false, error: error.message };
+      }
+    } else if (request.action === 'stopRecording') {
+      try {
+        const result = await stopRecording();
+        response = { success: true, data: result };
+      } catch (error) {
+        console.error('Failed to stop recording:', error);
+        response = { success: false, error: error.message };
+      }
     }
-  } else if (request.action === 'stopRecording') {
-    try {
-      const result = await stopRecording();
-      sendResponse({ success: true, data: result });
-    } catch (error) {
-      console.error('Failed to stop recording:', error);
-      sendResponse({ success: false, error: error.message });
+    
+    // メッセージIDを含めて返信
+    if (request.messageId) {
+      chrome.runtime.sendMessage({
+        messageId: request.messageId,
+        data: response
+      });
+    }
+    sendResponse(response);
+  } else {
+    // 直接のメッセージの場合（従来の処理）
+    if (request.action === 'startRecording') {
+      try {
+        await startRecording(request.options);
+        sendResponse({ success: true });
+      } catch (error) {
+        console.error('Failed to start recording:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    } else if (request.action === 'stopRecording') {
+      try {
+        const result = await stopRecording();
+        sendResponse({ success: true, data: result });
+      } catch (error) {
+        console.error('Failed to stop recording:', error);
+        sendResponse({ success: false, error: error.message });
+      }
     }
   }
   

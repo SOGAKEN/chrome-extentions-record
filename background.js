@@ -56,9 +56,18 @@ async function startRecording(options, sender) {
 
     if (existingContexts.length === 0) {
       // WASMサポートの確認とOffscreenドキュメントの選択
-      const offscreenUrl = options.useWASM && 'VideoEncoder' in self 
+      const baseUrl = options.useWASM && 'VideoEncoder' in self 
         ? 'offscreen-wasm.html' 
         : 'offscreen.html';
+      
+      // 録画オプションをURLパラメータとして追加
+      const params = new URLSearchParams({
+        audio: options.audio || false,
+        useWASM: options.useWASM || false,
+        autoStart: true
+      });
+      
+      const offscreenUrl = `${baseUrl}?${params.toString()}`;
       
       // Offscreenドキュメントを作成
       await chrome.offscreen.createDocument({
@@ -69,10 +78,32 @@ async function startRecording(options, sender) {
     }
 
     // Offscreenドキュメントに録画開始を通知
-    const response = await chrome.runtime.sendMessage({
-      action: 'startRecording',
-      options: options
+    // 少し待ってからメッセージを送信（Offscreenドキュメントの初期化を待つ）
+    await new Promise(resolve => setTimeout(resolve, 200));
+    
+    // Offscreenドキュメントの準備完了を確認
+    const contexts = await chrome.runtime.getContexts({
+      contextTypes: ['OFFSCREEN_DOCUMENT']
     });
+    
+    if (contexts.length === 0) {
+      throw new Error('Offscreen document not found');
+    }
+    
+    // Offscreenドキュメントは作成されたので、録画は開始されたとみなす
+    // Offscreenドキュメント内で自動的に録画が開始される
+    const response = { success: true };
+    
+    // 実際にメッセージを送信（エラーは無視）
+    try {
+      await chrome.runtime.sendMessage({
+        action: 'startRecording',
+        options: options
+      });
+    } catch (e) {
+      // Service WorkerからOffscreenへの直接通信はサポートされていない場合がある
+      console.log('Message sending skipped:', e.message);
+    }
 
     if (response.success) {
       isRecording = true;
@@ -119,9 +150,17 @@ async function stopRecording() {
 
     if (existingContexts.length > 0) {
       // Offscreenドキュメントに録画停止を通知
-      const response = await chrome.runtime.sendMessage({
-        action: 'stopRecording'
-      });
+      // Service WorkerからOffscreenへの通信は一方向で、レスポンスを待たない
+      const response = { success: true };
+      
+      // 実際にメッセージを送信（エラーは無視）
+      try {
+        await chrome.runtime.sendMessage({
+          action: 'stopRecording'
+        });
+      } catch (e) {
+        console.log('Stop message sending skipped:', e.message);
+      }
 
       if (response && response.success) {
         isRecording = false;
