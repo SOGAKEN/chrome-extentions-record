@@ -66,7 +66,20 @@ async function startRecording(options) {
     const settings = videoTrack.getSettings();
     console.log('Recording started with settings:', settings);
     
-    return { success: true, trackSettings: settings };
+    // 録画対象の種類を判別
+    let recordingType = 'unknown';
+    if (settings.displaySurface) {
+      recordingType = settings.displaySurface; // 'monitor', 'window', 'browser'
+    }
+    
+    // バックグラウンドに録画開始を通知
+    chrome.runtime.sendMessage({ 
+      action: 'recordingStartedWithType',
+      recordingType: recordingType,
+      settings: settings
+    });
+    
+    return { success: true, trackSettings: settings, recordingType: recordingType };
   } catch (error) {
     console.error('Offscreen: 録画開始エラー:', error);
     return { success: false, error: error.message };

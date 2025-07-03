@@ -28,6 +28,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // Offscreenから録画停止の通知を受け取った場合
     handleRecordingStopped();
     sendResponse({ success: true });
+  } else if (message.action === 'recordingStartedWithType') {
+    // Offscreenから録画開始の詳細情報を受け取った場合
+    handleRecordingStartedWithType(message.recordingType, message.settings);
+    sendResponse({ success: true });
   }
   return true;
 });
@@ -80,18 +84,7 @@ async function startRecording(options, sender) {
         message: '画面録画を開始しました。ポップアップを閉じても録画は継続されます。'
       });
       
-      // 録画中のタブにボーダーを表示
-      if (recordingTabId) {
-        // 少し遅延を入れて、content scriptが準備できるのを待つ
-        setTimeout(async () => {
-          try {
-            await chrome.tabs.sendMessage(recordingTabId, { action: 'showRecordingBorder' });
-            console.log('Border display message sent to tab:', recordingTabId);
-          } catch (error) {
-            console.log('Could not show border - tab might not support content scripts:', error);
-          }
-        }, 500);
-      }
+      // 録画開始時はボーダー表示を行わない（録画対象の種類が分かってから処理）
     }
 
     return response;
@@ -206,6 +199,25 @@ async function handleRecordingStopped() {
     title: '録画停止',
     message: '画面録画を停止しました。'
   });
+}
+
+// 録画開始時の詳細情報を処理
+async function handleRecordingStartedWithType(recordingType, settings) {
+  console.log('Recording type:', recordingType, 'Settings:', settings);
+  
+  // ブラウザタブの録画の場合のみボーダーを表示
+  if (recordingType === 'browser' && recordingTabId) {
+    try {
+      await chrome.tabs.sendMessage(recordingTabId, { action: 'showRecordingBorder' });
+      console.log('Border display message sent to tab:', recordingTabId);
+    } catch (error) {
+      console.log('Could not show border - tab might not support content scripts:', error);
+    }
+  } else if (recordingType === 'monitor') {
+    console.log('画面全体の録画中 - ボーダー表示をスキップ');
+  } else if (recordingType === 'window') {
+    console.log('ウィンドウの録画中 - ボーダー表示をスキップ');
+  }
 }
 
 // 録画のダウンロード
