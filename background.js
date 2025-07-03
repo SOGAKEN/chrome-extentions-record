@@ -57,7 +57,16 @@ async function startRecording(options, sender) {
 
     if (response.success) {
       isRecording = true;
-      recordingTabId = sender?.tab?.id || null;
+      
+      // 現在アクティブなタブを取得
+      try {
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        recordingTabId = activeTab?.id || null;
+        console.log('Recording tab ID:', recordingTabId);
+      } catch (error) {
+        console.log('Could not get active tab:', error);
+        recordingTabId = null;
+      }
       
       // 拡張機能アイコンにバッジを表示
       chrome.action.setBadgeText({ text: 'REC' });
@@ -73,11 +82,15 @@ async function startRecording(options, sender) {
       
       // 録画中のタブにボーダーを表示
       if (recordingTabId) {
-        try {
-          await chrome.tabs.sendMessage(recordingTabId, { action: 'showRecordingBorder' });
-        } catch (error) {
-          console.log('Could not show border - tab might not support content scripts');
-        }
+        // 少し遅延を入れて、content scriptが準備できるのを待つ
+        setTimeout(async () => {
+          try {
+            await chrome.tabs.sendMessage(recordingTabId, { action: 'showRecordingBorder' });
+            console.log('Border display message sent to tab:', recordingTabId);
+          } catch (error) {
+            console.log('Could not show border - tab might not support content scripts:', error);
+          }
+        }, 500);
       }
     }
 

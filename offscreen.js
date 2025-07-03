@@ -61,7 +61,12 @@ async function startRecording(options) {
     
     mediaRecorder.start();
     
-    return { success: true };
+    // 録画対象の情報を取得
+    const videoTrack = stream.getVideoTracks()[0];
+    const settings = videoTrack.getSettings();
+    console.log('Recording started with settings:', settings);
+    
+    return { success: true, trackSettings: settings };
   } catch (error) {
     console.error('Offscreen: 録画開始エラー:', error);
     return { success: false, error: error.message };

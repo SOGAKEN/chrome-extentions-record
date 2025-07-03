@@ -24,7 +24,8 @@
     "offscreen",
     "storage",
     "notifications",
-    "tabs"
+    "tabs",
+    "activeTab"
   ],
   "content_scripts": [
     {
