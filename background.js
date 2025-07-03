@@ -66,7 +66,7 @@ async function startRecording(options, sender) {
       // 通知を表示
       chrome.notifications.create({
         type: 'basic',
-        iconUrl: 'icon.png',
+        iconUrl: chrome.runtime.getURL('icon.png'),
         title: '録画開始',
         message: '画面録画を開始しました。ポップアップを閉じても録画は継続されます。'
       });
@@ -122,7 +122,7 @@ async function stopRecording() {
         // 通知を表示
         chrome.notifications.create({
           type: 'basic',
-          iconUrl: 'icon.png',
+          iconUrl: chrome.runtime.getURL('icon.png'),
           title: '録画停止',
           message: '画面録画を停止しました。'
         });
@@ -189,7 +189,7 @@ async function handleRecordingStopped() {
   // 通知を表示
   chrome.notifications.create({
     type: 'basic',
-    iconUrl: 'icon.png',
+    iconUrl: chrome.runtime.getURL('icon.png'),
     title: '録画停止',
     message: '画面録画を停止しました。'
   });
@@ -209,7 +209,7 @@ async function downloadRecording(base64data, filename) {
         console.error('ダウンロードエラー:', chrome.runtime.lastError);
         chrome.notifications.create({
           type: 'basic',
-          iconUrl: 'icon.png',
+          iconUrl: chrome.runtime.getURL('icon.png'),
           title: 'ダウンロードエラー',
           message: '録画ファイルのダウンロードに失敗しました。'
         });
@@ -221,7 +221,7 @@ async function downloadRecording(base64data, filename) {
               chrome.downloads.onChanged.removeListener(listener);
               chrome.notifications.create({
                 type: 'basic',
-                iconUrl: 'icon.png',
+                iconUrl: chrome.runtime.getURL('icon.png'),
                 title: 'ダウンロード完了',
                 message: `録画ファイル「${filename}」を保存しました。`
               });
@@ -229,7 +229,7 @@ async function downloadRecording(base64data, filename) {
               chrome.downloads.onChanged.removeListener(listener);
               chrome.notifications.create({
                 type: 'basic',
-                iconUrl: 'icon.png',
+                iconUrl: chrome.runtime.getURL('icon.png'),
                 title: 'ダウンロードエラー',
                 message: 'ファイルの保存中にエラーが発生しました。'
               });
@@ -242,7 +242,7 @@ async function downloadRecording(base64data, filename) {
     console.error('録画ダウンロードエラー:', error);
     chrome.notifications.create({
       type: 'basic',
-      iconUrl: 'icon.png',
+      iconUrl: chrome.runtime.getURL('icon.png'),
       title: 'エラー',
       message: '録画ファイルの処理中にエラーが発生しました。'
     });
