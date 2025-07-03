@@ -47,8 +47,7 @@ async function startRecording() {
     elements.status.textContent = '録画を開始しています...';
     
     const options = {
-      audio: elements.audioCheck.checked,
-      useWASM: true // 常にWASMモードを使用
+      audio: elements.audioCheck.checked
     };
     
     // バックグラウンドスクリプトに録画開始を依頼

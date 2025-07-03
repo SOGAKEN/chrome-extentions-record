@@ -55,17 +55,13 @@ async function startRecording(options, sender) {
     });
 
     if (existingContexts.length === 0) {
-      // 常にWASMモードを使用
-      const baseUrl = 'offscreen-wasm.html';
-      
       // 録画オプションをURLパラメータとして追加
       const params = new URLSearchParams({
         audio: options.audio || false,
-        useWASM: true,
         autoStart: true
       });
       
-      const offscreenUrl = `${baseUrl}?${params.toString()}`;
+      const offscreenUrl = `offscreen.html?${params.toString()}`;
       
       // Offscreenドキュメントを作成
       await chrome.offscreen.createDocument({

@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "mcp__inkdrop__create-note"
-    ],
-    "deny": []
-  }
-}
