@@ -32,6 +32,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // Offscreenから録画開始の詳細情報を受け取った場合
     handleRecordingStartedWithType(message.recordingType, message.settings);
     sendResponse({ success: true });
+  } else if (message.action === 'recordingStarted') {
+    // WASM版のOffscreenから録画開始通知を受け取った場合
+    console.log('Recording started with method:', message.method);
+    sendResponse({ success: true });
+  } else if (message.action === 'saveRecording') {
+    // WASM版から録画データを受け取った場合
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T').join('_').split('Z')[0];
+    const filename = `screen-recording-${timestamp}.webm`;
+    downloadRecording(message.data, filename);
+    sendResponse({ success: true });
   }
   return true;
 });
@@ -45,9 +55,14 @@ async function startRecording(options, sender) {
     });
 
     if (existingContexts.length === 0) {
+      // WASMサポートの確認とOffscreenドキュメントの選択
+      const offscreenUrl = options.useWASM && 'VideoEncoder' in self 
+        ? 'offscreen-wasm.html' 
+        : 'offscreen.html';
+      
       // Offscreenドキュメントを作成
       await chrome.offscreen.createDocument({
-        url: 'offscreen.html',
+        url: offscreenUrl,
         reasons: ['DISPLAY_MEDIA'],
         justification: 'Recording screen for screen recording extension'
       });
@@ -55,7 +70,7 @@ async function startRecording(options, sender) {
 
     // Offscreenドキュメントに録画開始を通知
     const response = await chrome.runtime.sendMessage({
-      action: 'startOffscreenRecording',
+      action: 'startRecording',
       options: options
     });
 
@@ -105,7 +120,7 @@ async function stopRecording() {
     if (existingContexts.length > 0) {
       // Offscreenドキュメントに録画停止を通知
       const response = await chrome.runtime.sendMessage({
-        action: 'stopOffscreenRecording'
+        action: 'stopRecording'
       });
 
       if (response && response.success) {
