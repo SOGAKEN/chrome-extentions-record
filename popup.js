@@ -13,19 +13,28 @@ const elements = {
 
 // 初期化時に録画状態を確認
 document.addEventListener('DOMContentLoaded', async () => {
-  const response = await chrome.runtime.sendMessage({ action: 'getRecordingStatus' });
-  if (response.isRecording) {
-    // 録画中の場合はUIを更新
-    elements.status.textContent = '録画中...';
-    elements.status.className = 'status recording';
-    elements.startBtn.disabled = true;
-    elements.stopBtn.disabled = false;
-    elements.audioCheck.disabled = true;
-    
-    // タイマーは開始時間を推定（正確な時間は保持していないため）
-    startTime = Date.now();
-    updateTimer();
-    timerInterval = setInterval(updateTimer, 1000);
+  try {
+    const response = await chrome.runtime.sendMessage({ action: 'getRecordingStatus' });
+    if (response && response.isRecording) {
+      // 録画中の場合はUIを更新
+      elements.status.textContent = '録画中...';
+      elements.status.className = 'status recording';
+      elements.startBtn.disabled = true;
+      elements.stopBtn.disabled = false;
+      elements.audioCheck.disabled = true;
+      
+      // タイマーは開始時間を推定（正確な時間は保持していないため）
+      startTime = Date.now();
+      updateTimer();
+      timerInterval = setInterval(updateTimer, 1000);
+    } else {
+      // 録画していない場合はUIをリセット
+      resetUI();
+    }
+  } catch (error) {
+    console.error('録画状態の確認エラー:', error);
+    // エラーが発生した場合は安全のためUIをリセット
+    resetUI();
   }
   
   // 最近のダウンロードを表示
@@ -73,13 +82,14 @@ async function startRecording() {
 async function stopRecording() {
   try {
     elements.status.textContent = '録画を停止しています...';
+    elements.stopBtn.disabled = true; // 連打防止
     
     // バックグラウンドスクリプトに録画停止を依頼
     const response = await chrome.runtime.sendMessage({
       action: 'stopRecording'
     });
     
-    if (response.success) {
+    if (response && response.success) {
       elements.status.textContent = '録画を保存しました';
       
       if (timerInterval) {
@@ -88,12 +98,16 @@ async function stopRecording() {
       }
       
       resetUI();
+      // ダウンロードリストを更新
+      setTimeout(updateDownloadList, 1000);
     } else {
-      throw new Error(response.error || '録画停止に失敗しました');
+      throw new Error(response?.error || '録画停止に失敗しました');
     }
   } catch (error) {
     console.error('録画停止エラー:', error);
     elements.status.textContent = 'エラー: ' + error.message;
+    // エラー時もUIをリセット
+    resetUI();
   }
 }
 

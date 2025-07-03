@@ -4,16 +4,32 @@ let recordingTabId = null;
 // メッセージリスナー
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'startRecording') {
-    startRecording(message.options, sender).then(sendResponse);
+    startRecording(message.options, sender)
+      .then(sendResponse)
+      .catch(error => {
+        console.error('Background: startRecording error:', error);
+        sendResponse({ success: false, error: error.message });
+      });
     return true; // 非同期レスポンスのため
   } else if (message.action === 'stopRecording') {
-    stopRecording().then(sendResponse);
+    stopRecording()
+      .then(sendResponse)
+      .catch(error => {
+        console.error('Background: stopRecording error:', error);
+        sendResponse({ success: false, error: error.message });
+      });
     return true;
   } else if (message.action === 'getRecordingStatus') {
     sendResponse({ isRecording, recordingTabId });
   } else if (message.action === 'downloadRecording') {
     downloadRecording(message.data, message.filename);
+    sendResponse({ success: true });
+  } else if (message.action === 'recordingStopped') {
+    // Offscreenから録画停止の通知を受け取った場合
+    handleRecordingStopped();
+    sendResponse({ success: true });
   }
+  return true;
 });
 
 // 録画開始
@@ -75,39 +91,66 @@ async function startRecording(options, sender) {
 // 録画停止
 async function stopRecording() {
   try {
-    const response = await chrome.runtime.sendMessage({
-      action: 'stopOffscreenRecording'
+    // Offscreenドキュメントが存在するか確認
+    const existingContexts = await chrome.runtime.getContexts({
+      contextTypes: ['OFFSCREEN_DOCUMENT'],
     });
 
-    if (response.success) {
-      isRecording = false;
-      
-      // ボーダーを非表示
-      if (recordingTabId) {
-        try {
-          await chrome.tabs.sendMessage(recordingTabId, { action: 'hideRecordingBorder' });
-        } catch (error) {
-          console.log('Could not hide border - tab might have been closed');
-        }
-      }
-      
-      recordingTabId = null;
-      
-      // バッジをクリア
-      chrome.action.setBadgeText({ text: '' });
-      
-      // 通知を表示
-      chrome.notifications.create({
-        type: 'basic',
-        iconUrl: 'icon.png',
-        title: '録画停止',
-        message: '画面録画を停止しました。'
+    if (existingContexts.length > 0) {
+      // Offscreenドキュメントに録画停止を通知
+      const response = await chrome.runtime.sendMessage({
+        action: 'stopOffscreenRecording'
       });
-    }
 
-    return response;
+      if (response && response.success) {
+        isRecording = false;
+        
+        // ボーダーを非表示
+        if (recordingTabId) {
+          try {
+            await chrome.tabs.sendMessage(recordingTabId, { action: 'hideRecordingBorder' });
+          } catch (error) {
+            console.log('Could not hide border - tab might have been closed');
+          }
+        }
+        
+        recordingTabId = null;
+        
+        // バッジをクリア
+        chrome.action.setBadgeText({ text: '' });
+        
+        // 通知を表示
+        chrome.notifications.create({
+          type: 'basic',
+          iconUrl: 'icon.png',
+          title: '録画停止',
+          message: '画面録画を停止しました。'
+        });
+
+        // Offscreenドキュメントをクリーンアップ
+        setTimeout(async () => {
+          try {
+            await chrome.offscreen.closeDocument();
+          } catch (e) {
+            // Already closed
+          }
+        }, 1000);
+      }
+
+      return response || { success: true };
+    } else {
+      // 録画していない場合
+      isRecording = false;
+      recordingTabId = null;
+      chrome.action.setBadgeText({ text: '' });
+      return { success: true };
+    }
   } catch (error) {
     console.error('Background: 録画停止エラー:', error);
+    // エラーが発生しても状態をリセット
+    isRecording = false;
+    recordingTabId = null;
+    chrome.action.setBadgeText({ text: '' });
     return { success: false, error: error.message };
   }
 }
@@ -124,6 +167,33 @@ chrome.tabs.onRemoved.addListener((tabId) => {
     console.log('録画タブが閉じられましたが、録画は継続します');
   }
 });
+
+// 録画停止の処理（Offscreenから呼ばれる）
+async function handleRecordingStopped() {
+  isRecording = false;
+  
+  // ボーダーを非表示
+  if (recordingTabId) {
+    try {
+      await chrome.tabs.sendMessage(recordingTabId, { action: 'hideRecordingBorder' });
+    } catch (error) {
+      console.log('Could not hide border - tab might have been closed');
+    }
+  }
+  
+  recordingTabId = null;
+  
+  // バッジをクリア
+  chrome.action.setBadgeText({ text: '' });
+  
+  // 通知を表示
+  chrome.notifications.create({
+    type: 'basic',
+    iconUrl: 'icon.png',
+    title: '録画停止',
+    message: '画面録画を停止しました。'
+  });
+}
 
 // 録画のダウンロード
 async function downloadRecording(base64data, filename) {
