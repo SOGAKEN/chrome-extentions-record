@@ -144,23 +144,19 @@ if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
 // 最近のダウンロードを表示
 async function updateDownloadList() {
   try {
-    // 最近24時間のダウンロードを取得
+    // 最新の1件のみ取得（パフォーマンス改善）
     const downloads = await chrome.downloads.search({
       query: ['screen-recording-'],
       orderBy: ['-startTime'],
-      limit: 10
+      limit: 1
     });
     
-    if (downloads.length > 0) {
+    if (downloads.length > 0 && downloads[0].filename.includes('screen-recording-')) {
       elements.downloadSection.style.display = 'block';
       elements.downloadList.innerHTML = '';
       
-      downloads.forEach(download => {
-        if (download.filename.includes('screen-recording-')) {
-          const item = createDownloadItem(download);
-          elements.downloadList.appendChild(item);
-        }
-      });
+      const item = createDownloadItem(downloads[0]);
+      elements.downloadList.appendChild(item);
     } else {
       elements.downloadSection.style.display = 'none';
     }

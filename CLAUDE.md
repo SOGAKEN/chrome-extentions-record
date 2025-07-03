@@ -119,11 +119,16 @@ This must be done without fail.
    - Technical issues prevent updating (after retry attempts)
 
 3. **Update strategy**:
+
    - Append new log entries to the existing note
    - Add a timestamp separator between entries: `---\n### Update: <current timestamp (JST)>\n---`
+   - When acquiring the date and time, please use the now command.
    - Keep all previous entries intact
+
 4. **Do not change the status.**
+
 5. **Include file operations summary**:
+
    - Add at the end of each log entry:
 
 ### Log Format
@@ -209,4 +214,3 @@ Update the note at each end of the task with the following format:
    - Include reference to the original log in the first line
 
 ### Remember: UPDATE FIRST, CREATE ONLY IF NECESSARY
-
