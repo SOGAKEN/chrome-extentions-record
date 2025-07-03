@@ -23,6 +23,15 @@
     "downloads",
     "offscreen",
     "storage",
-    "notifications"
+    "notifications",
+    "tabs",
+    "activeTab"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content-script.js"],
+      "run_at": "document_idle"
+    }
   ]
 }

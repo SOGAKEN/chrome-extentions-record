@@ -1,129 +1,193 @@
-let mediaRecorder = null;
-let recordedChunks = [];
-let stream = null;
+/**
+ * Offscreen document for screen recording
+ * Uses MediaRecorder API for stable recording
+ */
 
-// メッセージリスナー
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === 'startOffscreenRecording') {
-    startRecording(message.options).then(sendResponse);
-    return true; // 非同期レスポンスのため
-  } else if (message.action === 'stopOffscreenRecording') {
-    stopRecording().then(sendResponse);
-    return true;
+let stream = null;
+let mediaRecorder = null;
+let startTime = 0;
+
+// URLパラメータから設定を取得
+const urlParams = new URLSearchParams(window.location.search);
+const autoStart = urlParams.get('autoStart') === 'true';
+const audioOption = urlParams.get('audio') === 'true';
+let isRecordingStarted = false; // 録画開始済みフラグ
+
+// 自動開始が有効な場合は録画を開始
+if (autoStart && !isRecordingStarted) {
+  console.log('Auto-starting recording with options:', { audio: audioOption });
+  // 自動開始を少し遅延させて初期化を待つ
+  setTimeout(async () => {
+    if (!isRecordingStarted) {
+      isRecordingStarted = true;
+      try {
+        await startRecording({ audio: audioOption });
+      } catch (error) {
+        console.error('Auto-start failed:', error);
+        isRecordingStarted = false;
+      }
+    }
+  }, 500);
+}
+
+// Listen for messages from the background script
+chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
+  console.log('Offscreen received message:', request.action);
+  
+  if (request.action === 'startRecording') {
+    // 既に録画開始している場合はスキップ
+    if (isRecordingStarted) {
+      console.log('Recording already started, skipping duplicate request');
+      sendResponse({ success: true });
+      return;
+    }
+    
+    try {
+      isRecordingStarted = true;
+      await startRecording(request.options || { audio: audioOption });
+      sendResponse({ success: true });
+    } catch (error) {
+      console.error('Failed to start recording:', error);
+      isRecordingStarted = false;
+      sendResponse({ success: false, error: error.message });
+    }
+  } else if (request.action === 'stopRecording') {
+    try {
+      const result = await stopRecording();
+      sendResponse({ success: true, data: result });
+    } catch (error) {
+      console.error('Failed to stop recording:', error);
+      sendResponse({ success: false, error: error.message });
+    }
   }
+  
+  return true; // Keep the message channel open for async response
 });
 
-// 録画開始
 async function startRecording(options) {
   try {
-    // 既存の録画があれば停止
-    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-      await stopRecording();
-    }
-
-    // 画面共有の取得
+    // Request screen capture
     stream = await navigator.mediaDevices.getDisplayMedia({
       video: {
         displaySurface: 'browser'
       },
       audio: options.audio || false
     });
-
-    // MediaRecorderの設定
-    const recorderOptions = {
-      mimeType: 'video/webm;codecs=vp9,opus'
-    };
     
-    if (!MediaRecorder.isTypeSupported(recorderOptions.mimeType)) {
-      recorderOptions.mimeType = 'video/webm';
-    }
+    console.log('Screen capture started');
     
-    mediaRecorder = new MediaRecorder(stream, recorderOptions);
-    recordedChunks = [];
+    // Use MediaRecorder directly
+    await startMediaRecording(stream, options);
     
-    mediaRecorder.ondataavailable = (event) => {
-      if (event.data.size > 0) {
-        recordedChunks.push(event.data);
-      }
-    };
+    // Send notification that recording has started
+    chrome.runtime.sendMessage({ 
+      action: 'recordingStarted',
+      method: 'MediaRecorder'
+    });
     
-    mediaRecorder.onstop = async () => {
-      await saveRecording();
-    };
-    
-    // ストリームが終了したら自動的に停止
+    // Listen for stream end
     stream.getVideoTracks()[0].onended = async () => {
+      console.log('Stream ended by user');
       await stopRecording();
+      chrome.runtime.sendMessage({ action: 'recordingStopped' });
     };
-    
-    mediaRecorder.start();
     
     return { success: true };
   } catch (error) {
-    console.error('Offscreen: 録画開始エラー:', error);
-    return { success: false, error: error.message };
+    console.error('Error starting recording:', error);
+    cleanup();
+    throw error;
   }
 }
 
-// 録画停止
+async function startMediaRecording(stream, options) {
+  console.log('Starting recording with MediaRecorder');
+  
+  // MediaRecorder APIを使用（より安定）
+  const mimeType = 'video/webm;codecs=vp8' + (options.audio ? ',opus' : '');
+  
+  const recorder = new MediaRecorder(stream, {
+    mimeType: mimeType,
+    videoBitsPerSecond: getBitrateForQuality(options.quality)
+  });
+  
+  const chunks = [];
+  
+  recorder.ondataavailable = (event) => {
+    if (event.data && event.data.size > 0) {
+      chunks.push(event.data);
+    }
+  };
+  
+  recorder.onstop = async () => {
+    const blob = new Blob(chunks, { type: 'video/webm' });
+    
+    // Convert to base64 for transfer
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      // Send the recording to background for download
+      chrome.runtime.sendMessage({
+        action: 'saveRecording',
+        data: reader.result
+      });
+    };
+    reader.readAsDataURL(blob);
+  };
+  
+  // Store recorder reference
+  mediaRecorder = recorder;
+  
+  // Start recording
+  recorder.start(1000); // Collect data every second
+  startTime = performance.now();
+}
+
 async function stopRecording() {
+  console.log('Stopping recording...');
+  
   try {
-    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+      // Stop MediaRecorder
       mediaRecorder.stop();
       
-      // stopイベントが完了するまで待機
-      await new Promise((resolve) => {
-        const checkInterval = setInterval(() => {
-          if (mediaRecorder.state === 'inactive') {
-            clearInterval(checkInterval);
-            resolve();
-          }
+      // Wait for stop event to fire
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          resolve({ success: true });
         }, 100);
       });
     }
-    
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
-      stream = null;
-    }
-    
-    return { success: true };
-  } catch (error) {
-    console.error('Offscreen: 録画停止エラー:', error);
-    return { success: false, error: error.message };
+  } finally {
+    cleanup();
+    isRecordingStarted = false;
   }
 }
 
-// 録画保存
-async function saveRecording() {
-  try {
-    const blob = new Blob(recordedChunks, {
-      type: 'video/webm'
-    });
-    
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-    const filename = `screen-recording-${timestamp}.webm`;
-    
-    // BlobをBase64に変換
-    const reader = new FileReader();
-    reader.readAsDataURL(blob);
-    
-    await new Promise((resolve, reject) => {
-      reader.onloadend = resolve;
-      reader.onerror = reject;
-    });
-    
-    const base64data = reader.result;
-    
-    // バックグラウンドスクリプトに送信してダウンロード
-    chrome.runtime.sendMessage({
-      action: 'downloadRecording',
-      data: base64data,
-      filename: filename
-    });
-    
-    recordedChunks = [];
-  } catch (error) {
-    console.error('Offscreen: 録画保存エラー:', error);
+function cleanup() {
+  // Stop all tracks
+  if (stream) {
+    stream.getTracks().forEach(track => track.stop());
+    stream = null;
+  }
+  
+  // Clean up MediaRecorder
+  if (mediaRecorder) {
+    mediaRecorder = null;
   }
 }
+
+function getBitrateForQuality(quality) {
+  switch (quality) {
+    case 'high':
+      return 5_000_000; // 5 Mbps
+    case 'medium':
+      return 2_500_000; // 2.5 Mbps
+    case 'low':
+      return 1_000_000; // 1 Mbps
+    default:
+      return 2_500_000; // Default to medium
+  }
+}
+
+// Log that offscreen document is ready
+console.log('Offscreen document ready');

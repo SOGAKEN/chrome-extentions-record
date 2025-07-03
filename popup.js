@@ -13,19 +13,28 @@ const elements = {
 
 // 初期化時に録画状態を確認
 document.addEventListener('DOMContentLoaded', async () => {
-  const response = await chrome.runtime.sendMessage({ action: 'getRecordingStatus' });
-  if (response.isRecording) {
-    // 録画中の場合はUIを更新
-    elements.status.textContent = '録画中...';
-    elements.status.className = 'status recording';
-    elements.startBtn.disabled = true;
-    elements.stopBtn.disabled = false;
-    elements.audioCheck.disabled = true;
-    
-    // タイマーは開始時間を推定（正確な時間は保持していないため）
-    startTime = Date.now();
-    updateTimer();
-    timerInterval = setInterval(updateTimer, 1000);
+  try {
+    const response = await chrome.runtime.sendMessage({ action: 'getRecordingStatus' });
+    if (response && response.isRecording) {
+      // 録画中の場合はUIを更新
+      elements.status.textContent = '録画中...';
+      elements.status.className = 'status recording';
+      elements.startBtn.disabled = true;
+      elements.stopBtn.disabled = false;
+      elements.audioCheck.disabled = true;
+      
+      // タイマーは開始時間を推定（正確な時間は保持していないため）
+      startTime = Date.now();
+      updateTimer();
+      timerInterval = setInterval(updateTimer, 1000);
+    } else {
+      // 録画していない場合はUIをリセット
+      resetUI();
+    }
+  } catch (error) {
+    console.error('録画状態の確認エラー:', error);
+    // エラーが発生した場合は安全のためUIをリセット
+    resetUI();
   }
   
   // 最近のダウンロードを表示
@@ -73,13 +82,14 @@ async function startRecording() {
 async function stopRecording() {
   try {
     elements.status.textContent = '録画を停止しています...';
+    elements.stopBtn.disabled = true; // 連打防止
     
     // バックグラウンドスクリプトに録画停止を依頼
     const response = await chrome.runtime.sendMessage({
       action: 'stopRecording'
     });
     
-    if (response.success) {
+    if (response && response.success) {
       elements.status.textContent = '録画を保存しました';
       
       if (timerInterval) {
@@ -88,12 +98,16 @@ async function stopRecording() {
       }
       
       resetUI();
+      // ダウンロードリストを更新
+      setTimeout(updateDownloadList, 1000);
     } else {
-      throw new Error(response.error || '録画停止に失敗しました');
+      throw new Error(response?.error || '録画停止に失敗しました');
     }
   } catch (error) {
     console.error('録画停止エラー:', error);
     elements.status.textContent = 'エラー: ' + error.message;
+    // エラー時もUIをリセット
+    resetUI();
   }
 }
 
@@ -130,23 +144,19 @@ if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
 // 最近のダウンロードを表示
 async function updateDownloadList() {
   try {
-    // 最近24時間のダウンロードを取得
+    // 最新の1件のみ取得（パフォーマンス改善）
     const downloads = await chrome.downloads.search({
       query: ['screen-recording-'],
       orderBy: ['-startTime'],
-      limit: 10
+      limit: 1
     });
     
-    if (downloads.length > 0) {
+    if (downloads.length > 0 && downloads[0].filename.includes('screen-recording-')) {
       elements.downloadSection.style.display = 'block';
       elements.downloadList.innerHTML = '';
       
-      downloads.forEach(download => {
-        if (download.filename.includes('screen-recording-')) {
-          const item = createDownloadItem(download);
-          elements.downloadList.appendChild(item);
-        }
-      });
+      const item = createDownloadItem(downloads[0]);
+      elements.downloadList.appendChild(item);
     } else {
       elements.downloadSection.style.display = 'none';
     }
