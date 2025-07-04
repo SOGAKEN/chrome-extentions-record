@@ -39,7 +39,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   } else if (message.action === 'saveRecording') {
     // WASM版から録画データを受け取った場合
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T').join('_').split('Z')[0];
-    const filename = `screen-recording-${timestamp}.webm`;
+    
+    // 録画時間をフォーマット（ミリ秒を分:秒に変換）
+    let durationStr = '';
+    if (message.duration) {
+      const totalSeconds = Math.floor(message.duration / 1000);
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
+      durationStr = `_${minutes}m${seconds.toString().padStart(2, '0')}s`;
+    }
+    
+    const filename = `screen-recording-${timestamp}${durationStr}.webm`;
     downloadRecording(message.data, filename);
     sendResponse({ success: true });
   } else if (message.action === 'processingStatus') {

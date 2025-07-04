@@ -36,7 +36,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["ffmpeg-processor.js"],
+      "resources": ["ffmpeg-processor.js", "webm-duration-fix.js"],
       "matches": ["<all_urls>"]
     }
   ],
