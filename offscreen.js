@@ -6,12 +6,37 @@
 let stream = null;
 let mediaRecorder = null;
 let startTime = 0;
+let recordingStartTime = null;
+let webmDurationFix = null;
 
 // URLパラメータから設定を取得
 const urlParams = new URLSearchParams(window.location.search);
 const autoStart = urlParams.get('autoStart') === 'true';
 const audioOption = urlParams.get('audio') === 'true';
 let isRecordingStarted = false; // 録画開始済みフラグ
+
+// WebMDurationFixの読み込み
+async function loadWebMDurationFix() {
+  try {
+    const script = document.createElement('script');
+    script.src = chrome.runtime.getURL('webm-duration-fix.js');
+    document.head.appendChild(script);
+    
+    await new Promise((resolve) => {
+      script.onload = resolve;
+    });
+    
+    if (typeof WebMDurationFix !== 'undefined') {
+      webmDurationFix = new WebMDurationFix();
+      console.log('WebMDurationFix loaded');
+    }
+  } catch (error) {
+    console.error('Failed to load WebMDurationFix:', error);
+  }
+}
+
+// 必要なライブラリをロード
+loadWebMDurationFix(); // 常にロード（軽量なため）
 
 // 自動開始が有効な場合は録画を開始
 if (autoStart && !isRecordingStarted) {
@@ -120,7 +145,20 @@ async function startMediaRecording(stream, options) {
   };
   
   recorder.onstop = async () => {
-    const blob = new Blob(chunks, { type: 'video/webm' });
+    let blob = new Blob(chunks, { type: 'video/webm' });
+    const recordingDuration = Date.now() - recordingStartTime; // 録画時間を計算
+    
+    // WebMDurationFixで軽量な修正を試みる
+    if (webmDurationFix) {
+      try {
+        console.log('Fixing WebM duration metadata...');
+        blob = await webmDurationFix.fixDuration(blob, recordingDuration);
+        console.log('WebM duration fixed successfully');
+      } catch (error) {
+        console.error('Failed to fix WebM duration:', error);
+        // エラーが発生しても続行
+      }
+    }
     
     // Convert to base64 for transfer
     const reader = new FileReader();
@@ -128,7 +166,8 @@ async function startMediaRecording(stream, options) {
       // Send the recording to background for download
       chrome.runtime.sendMessage({
         action: 'saveRecording',
-        data: reader.result
+        data: reader.result,
+        duration: recordingDuration // 録画時間も送信
       });
     };
     reader.readAsDataURL(blob);
@@ -140,6 +179,7 @@ async function startMediaRecording(stream, options) {
   // Start recording
   recorder.start(1000); // Collect data every second
   startTime = performance.now();
+  recordingStartTime = Date.now(); // 録画開始時刻を記録
 }
 
 async function stopRecording() {

@@ -33,5 +33,11 @@
       "js": ["content-script.js"],
       "run_at": "document_idle"
     }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["webm-duration-fix.js"],
+      "matches": ["<all_urls>"]
+    }
   ]
 }
