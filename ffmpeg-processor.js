@@ -17,22 +17,23 @@ class FFmpegProcessor {
 
   async _performInit() {
     try {
-      // FFmpeg.wasmライブラリをCDNから読み込む
-      // 注意: 実際の実装では、これらのファイルを拡張機能に含めることを推奨
-      await this.loadScript('https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/ffmpeg.min.js');
+      // FFmpeg.wasmはセキュリティ制限により外部CDNから読み込めません
+      // 以下のいずれかの方法で対応してください：
+      // 1. FFmpeg処理を無効にする（UIのチェックボックスで制御可能）
+      // 2. FFmpeg.wasmファイルをローカルにダウンロードして配置
+      // 詳細はREADME_FFMPEG_SETUP.mdを参照
       
-      // グローバル変数からFFmpegを取得
-      const { createFFmpeg } = window.FFmpeg;
+      console.warn('FFmpeg.wasm is not loaded. Please see README_FFMPEG_SETUP.md for setup instructions.');
+      throw new Error('FFmpeg.wasm not available. Please disable FFmpeg processing or set up local files.');
       
-      this.ffmpeg = createFFmpeg({
-        log: false,
-        corePath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/ffmpeg-core.js',
-        workerPath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/ffmpeg-core.worker.js',
-      });
-      
-      await this.ffmpeg.load();
-      this.isLoaded = true;
-      console.log('FFmpeg.wasm loaded successfully');
+      // ローカルファイルを使用する場合の例：
+      // await this.loadScript(chrome.runtime.getURL('ffmpeg.min.js'));
+      // const { createFFmpeg } = window.FFmpeg;
+      // this.ffmpeg = createFFmpeg({
+      //   log: false,
+      //   corePath: chrome.runtime.getURL('ffmpeg-core.js'),
+      //   workerPath: chrome.runtime.getURL('ffmpeg-core.worker.js'),
+      // });
     } catch (error) {
       console.error('Failed to load FFmpeg.wasm:', error);
       throw error;
