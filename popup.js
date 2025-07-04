@@ -7,7 +7,6 @@ const elements = {
   status: document.getElementById('status'),
   timer: document.getElementById('timer'),
   audioCheck: document.getElementById('audioCheck'),
-  ffmpegCheck: document.getElementById('ffmpegCheck'),
   downloadSection: document.getElementById('downloadSection'),
   downloadList: document.getElementById('downloadList')
 };
@@ -23,7 +22,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       elements.startBtn.disabled = true;
       elements.stopBtn.disabled = false;
       elements.audioCheck.disabled = true;
-      elements.ffmpegCheck.disabled = true;
       
       // タイマーは開始時間を推定（正確な時間は保持していないため）
       startTime = Date.now();
@@ -49,8 +47,7 @@ async function startRecording() {
     elements.status.textContent = '録画を開始しています...';
     
     const options = {
-      audio: elements.audioCheck.checked,
-      fixWebM: elements.ffmpegCheck.checked
+      audio: elements.audioCheck.checked
     };
     
     // バックグラウンドスクリプトに録画開始を依頼
@@ -66,7 +63,6 @@ async function startRecording() {
       elements.startBtn.disabled = true;
       elements.stopBtn.disabled = false;
       elements.audioCheck.disabled = true;
-      elements.ffmpegCheck.disabled = true;
       
       // タイマー開始
       startTime = Date.now();
@@ -122,7 +118,6 @@ function resetUI() {
   elements.startBtn.disabled = false;
   elements.stopBtn.disabled = true;
   elements.audioCheck.disabled = false;
-  elements.ffmpegCheck.disabled = false;
   elements.timer.textContent = '00:00';
 }
 

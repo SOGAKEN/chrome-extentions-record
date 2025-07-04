@@ -6,7 +6,6 @@
 let stream = null;
 let mediaRecorder = null;
 let startTime = 0;
-let ffmpegProcessor = null;
 let recordingStartTime = null;
 let webmDurationFix = null;
 
@@ -14,30 +13,7 @@ let webmDurationFix = null;
 const urlParams = new URLSearchParams(window.location.search);
 const autoStart = urlParams.get('autoStart') === 'true';
 const audioOption = urlParams.get('audio') === 'true';
-const fixWebM = urlParams.get('fixWebM') !== 'false'; // デフォルトで有効
 let isRecordingStarted = false; // 録画開始済みフラグ
-
-// FFmpegProcessorの動的インポート関数
-async function loadFFmpegProcessor() {
-  try {
-    const script = document.createElement('script');
-    script.src = chrome.runtime.getURL('ffmpeg-processor.js');
-    document.head.appendChild(script);
-    
-    // スクリプトがロードされるまで待機
-    await new Promise((resolve) => {
-      script.onload = resolve;
-    });
-    
-    // グローバルなFFmpegProcessorクラスを使用
-    if (typeof FFmpegProcessor !== 'undefined') {
-      ffmpegProcessor = new FFmpegProcessor();
-      console.log('FFmpegProcessor loaded');
-    }
-  } catch (error) {
-    console.error('Failed to load FFmpegProcessor:', error);
-  }
-}
 
 // WebMDurationFixの読み込み
 async function loadWebMDurationFix() {
@@ -61,9 +37,6 @@ async function loadWebMDurationFix() {
 
 // 必要なライブラリをロード
 loadWebMDurationFix(); // 常にロード（軽量なため）
-if (fixWebM) {
-  loadFFmpegProcessor(); // FFmpegは設定が有効な場合のみ
-}
 
 // 自動開始が有効な場合は録画を開始
 if (autoStart && !isRecordingStarted) {
@@ -176,7 +149,7 @@ async function startMediaRecording(stream, options) {
     const recordingDuration = Date.now() - recordingStartTime; // 録画時間を計算
     
     // WebMDurationFixで軽量な修正を試みる
-    if (webmDurationFix && !fixWebM) {
+    if (webmDurationFix) {
       try {
         console.log('Fixing WebM duration metadata...');
         blob = await webmDurationFix.fixDuration(blob, recordingDuration);
@@ -184,36 +157,6 @@ async function startMediaRecording(stream, options) {
       } catch (error) {
         console.error('Failed to fix WebM duration:', error);
         // エラーが発生しても続行
-      }
-    }
-    
-    // FFmpegProcessorが利用可能でfixWebMが有効な場合、WebMファイルを修正
-    if (fixWebM && ffmpegProcessor) {
-      try {
-        console.log('Fixing WebM timestamps with FFmpeg...');
-        chrome.runtime.sendMessage({
-          action: 'processingStatus',
-          status: 'Fixing WebM file timestamps...'
-        });
-        
-        // 進捗コールバック関数
-        const progressCallback = (status, progress) => {
-          chrome.runtime.sendMessage({
-            action: 'processingStatus',
-            status: status,
-            progress: progress
-          });
-        };
-        
-        blob = await ffmpegProcessor.fixWebMTimestamps(blob, progressCallback);
-        console.log('WebM timestamps fixed successfully');
-      } catch (error) {
-        console.error('Failed to fix WebM timestamps:', error);
-        // エラーが発生しても元のblobを使用して続行
-        chrome.runtime.sendMessage({
-          action: 'processingStatus',
-          status: 'FFmpeg processing failed, using original file'
-        });
       }
     }
     

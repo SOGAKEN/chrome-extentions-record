@@ -36,11 +36,8 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["ffmpeg-processor.js", "webm-duration-fix.js"],
+      "resources": ["webm-duration-fix.js"],
       "matches": ["<all_urls>"]
     }
-  ],
-  "content_security_policy": {
-    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
-  }
+  ]
 }
