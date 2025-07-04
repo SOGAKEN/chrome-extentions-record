@@ -42,6 +42,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const filename = `screen-recording-${timestamp}.webm`;
     downloadRecording(message.data, filename);
     sendResponse({ success: true });
+  } else if (message.action === 'processingStatus') {
+    // 処理状況の通知を受け取った場合
+    handleProcessingStatus(message.status, message.progress);
+    sendResponse({ success: true });
   }
   return true;
 });
@@ -58,7 +62,8 @@ async function startRecording(options, sender) {
       // 録画オプションをURLパラメータとして追加
       const params = new URLSearchParams({
         audio: options.audio || false,
-        autoStart: true
+        autoStart: true,
+        fixWebM: options.fixWebM || false
       });
       
       const offscreenUrl = `offscreen.html?${params.toString()}`;
@@ -265,6 +270,40 @@ async function handleRecordingStartedWithType(recordingType, settings) {
     console.log('画面全体の録画中 - ボーダー表示をスキップ');
   } else if (recordingType === 'window') {
     console.log('ウィンドウの録画中 - ボーダー表示をスキップ');
+  }
+}
+
+// 処理状況の通知を処理
+function handleProcessingStatus(status, progress) {
+  console.log('Processing status:', status, 'Progress:', progress);
+  
+  // 処理状況に応じて通知を表示
+  if (status === 'processing_started') {
+    chrome.notifications.create('processing', {
+      type: 'progress',
+      iconUrl: chrome.runtime.getURL('icon.png'),
+      title: '録画データを処理中',
+      message: 'WebMファイルを修正しています...',
+      progress: 0
+    });
+  } else if (status === 'processing_progress' && progress !== undefined) {
+    chrome.notifications.update('processing', {
+      progress: Math.round(progress)
+    });
+  } else if (status === 'processing_complete') {
+    chrome.notifications.update('processing', {
+      type: 'basic',
+      title: '処理完了',
+      message: '録画データの処理が完了しました。ダウンロードを開始します。',
+      progress: undefined
+    });
+  } else if (status === 'processing_error') {
+    chrome.notifications.update('processing', {
+      type: 'basic',
+      title: '処理エラー',
+      message: '録画データの処理中にエラーが発生しました。',
+      progress: undefined
+    });
   }
 }
 
